@@ -37,13 +37,13 @@ src/
 ### 安装依赖
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 开发服务器
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 服务器将在 http://localhost:5173 启动
@@ -51,13 +51,13 @@ npm run dev
 ### 生产构建
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 ### 预览生产构建
 
 ```bash
-npm run preview
+pnpm run preview
 ```
 
 ## ✨ 特性

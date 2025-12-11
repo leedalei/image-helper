@@ -16,10 +16,10 @@ tasks:
     generates:
       - node_modules
     preconditions:
-      - sh: npm version
+      - sh: pnpm version
         msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
     cmds:
-      - npm install
+      - pnpm install
 
   build:frontend:
     label: build:frontend (DEV={{.DEV}})

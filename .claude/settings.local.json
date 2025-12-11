@@ -12,7 +12,11 @@
       "Bash(npm install @linaria/core @linaria/react @linaria/babel-preset)",
       "Bash(npm install -D @babel/preset-react @babel/preset-typescript @babel/preset-env)",
       "Bash(node:*)",
-      "Bash(npm --version:*)"
+      "Bash(npm --version:*)",
+      "Bash(npm install:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(pnpm install:*)"
     ],
     "deny": [],
     "ask": []

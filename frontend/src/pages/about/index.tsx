@@ -1,10 +1,17 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
 
 function About() {
   return (
-    <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 py-6 sm:px-0 space-y-6">
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-7xl mx-auto py-6 px-4">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">关于</h1>
+          <p className="text-gray-600 mt-1">
+            Image Helper - 现代图片处理应用
+          </p>
+        </div>
+        <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>About Image Helper</CardTitle>
@@ -119,6 +126,7 @@ function About() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     </div>
   );
