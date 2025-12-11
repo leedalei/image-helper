@@ -1,25 +1,52 @@
-/** 
- * This file tells your IDE where the root of your JavaScript project is, and sets some
- * options that it can use to provide autocompletion and other features.  
+/**
+ * TypeScript 配置文件
+ * 详细的 TypeScript 配置选项，启用严格类型检查和现代 JavaScript 特性
  */
 {
   "compilerOptions": {
-    "allowJs": true,
-    "moduleResolution": "bundler",
     /**
-     * The target and module can be set to ESNext to allow writing modern JavaScript, 
-     * and Vite will compile down to the level of "build.target" specified in the vite config file.
-     * Builds will error if you use a feature that cannot be compiled down to the target level.
+     * 基本选项
      */
     "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "resolveJsonModule": true,
-    /**
-     * Enable checkJs if you'd like type checking in `.js` files.
-     */
-    "checkJs": false,
-    "strict": true,
     "skipLibCheck": true,
+
+    /**
+     * 模块解析
+     */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+
+    /**
+     * 类型检查
+     */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /**
+     * 路径映射
+     */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /**
+     * JSX 支持
+     */
+    "jsx": "react-jsx",
+
+    /**
+     * 类型定义
+     */
+    "types": ["vite/client"]
   },
   "include": ["src", "bindings"]
 }

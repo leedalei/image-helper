@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm run build)",
+      "Bash(npm run dev)",
+      "WebSearch",
+      "Bash(npm install -D typescript @types/node)",
+      "Bash(npm run build:dev)",
+      "Bash(npx vite)",
+      "Bash(npm install @linaria/core @linaria/react @linaria/vite-plugin)",
+      "Bash(npm install @linaria/core @linaria/react @linaria/babel-preset)",
+      "Bash(npm install -D @babel/preset-react @babel/preset-typescript @babel/preset-env)",
+      "Bash(node:*)",
+      "Bash(npm --version:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
