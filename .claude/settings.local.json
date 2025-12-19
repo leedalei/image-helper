@@ -32,7 +32,11 @@
       "Bash(npm run)",
       "WebFetch(domain:v3alpha.wails.io)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:wails.io)"
+      "WebFetch(domain:wails.io)",
+      "Bash(git tag:*)",
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
