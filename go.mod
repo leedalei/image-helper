@@ -2,7 +2,10 @@ module changeme
 
 go 1.24.0
 
-require github.com/wailsapp/wails/v3 v3.0.0-alpha.42
+require (
+	github.com/disintegration/imaging v1.6.2
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.42
+)
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
@@ -39,6 +42,7 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/image v0.24.0 // indirect
 	golang.org/x/net v0.37.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.23.0 // indirect

@@ -9,12 +9,12 @@ interface SidebarItem {
 
 const sidebarItems: SidebarItem[] = [
   {
-    title: '图片编辑',
-    path: '/edit',
-  },
-  {
     title: '图片压缩',
     path: '/compress',
+  },
+   {
+    title: '图片编辑',
+    path: '/edit',
   },
   {
     title: '格式转换',

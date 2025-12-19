@@ -6,6 +6,8 @@ import (
 	"log"
 	"time"
 
+	"changeme/compressor"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -35,10 +37,11 @@ func main() {
 	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
 	app := application.New(application.Options{
-		Name:        "image-helper",
-		Description: "A demo of using raw HTML & CSS",
+		Name:        "大雷的图片压缩器",
+		Description: "A powerful image processing application with compression capabilities",
 		Services: []application.Service{
 			application.NewService(&GreetService{}),
+			application.NewService(compressor.NewCompressor()),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -54,7 +57,9 @@ func main() {
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "Window 1",
+		Title:  "大雷的图片压缩器",
+		Width:  1280,
+		Height: 768,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,

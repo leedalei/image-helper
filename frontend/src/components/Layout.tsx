@@ -1,13 +1,14 @@
 import { Outlet } from 'react-router-dom';
+import { Toaster } from "@/components/ui/sonner"
 import Sidebar from './Sidebar';
 
 export default function Layout() {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* 左侧固定 Sidebar */}
-      <div className="flex-shrink-0">
+      {/* <div className="flex-shrink-0">
         <Sidebar />
-      </div>
+      </div> */}
 
       {/* 右侧可滚动内容区 */}
       <div className="flex-1 overflow-hidden">
@@ -15,6 +16,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      <Toaster />
     </div>
   );
 }

@@ -16,6 +16,7 @@ export default function DraggableDivider({
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
     e.preventDefault();
+    e.stopPropagation(); // 阻止事件冒泡，避免与图片拖拽冲突
   };
 
   const handleMouseUp = () => {
@@ -51,7 +52,7 @@ export default function DraggableDivider({
     <div ref={containerRef} className="relative w-full h-full">
       {/* 分隔线 */}
       <div
-        className={`absolute top-0 bottom-0 w-1 bg-gray-300 hover:bg-gray-400 transition-colors cursor-col-resize z-10 ${
+        className={`draggable-divider absolute top-0 bottom-0 w-1 bg-gray-300 hover:bg-gray-400 transition-colors cursor-col-resize z-10 ${
           isDragging ? 'bg-blue-500' : ''
         }`}
         style={{ left: `${position}%` }}

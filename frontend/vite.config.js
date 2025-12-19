@@ -3,6 +3,7 @@ import wails from "@wailsio/runtime/plugins/vite";
 import react from "@vitejs/plugin-react";
 import wyw from '@wyw-in-js/vite';
 import path from "path";
+import tailwindcss from "@tailwindcss/vite"
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -17,10 +18,12 @@ export default defineConfig({
       babelOptions: {
         presets: ['@babel/preset-typescript', '@babel/preset-react'],
       },
-    })
+    }),
+    tailwindcss()
   ],
   resolve: {
     alias: {
+      "@buildings": path.resolve(__dirname, "./buildings"),
       "@": path.resolve(__dirname, "./src"),
     },
   },
