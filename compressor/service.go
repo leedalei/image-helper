@@ -5,11 +5,20 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/gif"
 	"image/jpeg"
+	"image/png"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/disintegration/imaging"
+
+	// Register image formats for decoding
+	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/tiff"
+	_ "golang.org/x/image/webp"
 )
 
 // Service 图片压缩服务实现
@@ -38,6 +47,10 @@ func (s *Service) GetImageInfo(data []byte) (*ImageInfo, error) {
 		imgFormat = FormatWebP
 	case "tiff":
 		imgFormat = FormatTIFF
+	case "gif":
+		imgFormat = FormatGIF
+	case "bmp":
+		imgFormat = FormatBMP
 	default:
 		return nil, fmt.Errorf("不支持的图片格式: %s", format)
 	}
@@ -113,24 +126,73 @@ func (s *Service) Compress(data []byte, options CompressionOptions) (*Compressio
 	}, nil
 }
 
-// BatchCompress 批量压缩
+// BatchCompress 批量压缩（使用goroutine并发处理）
 func (s *Service) BatchCompress(req BatchCompressionRequest) (*BatchCompressionResponse, error) {
-	results := make([]CompressionResult, 0, len(req.Images))
+	numImages := len(req.Images)
+	if numImages == 0 {
+		return &BatchCompressionResponse{
+			Results:      []CompressionResult{},
+			SuccessCount: 0,
+			FailedCount:  0,
+		}, nil
+	}
+
+	// 使用channel收集结果
+	type compressionResultWithIndex struct {
+		index  int
+		result *CompressionResult
+		err    error
+	}
+
+	resultChan := make(chan compressionResultWithIndex, numImages)
+	var wg sync.WaitGroup
+
+	// 并发处理每张图片
+	for i, imgData := range req.Images {
+		wg.Add(1)
+		go func(index int, data []byte) {
+			defer wg.Done()
+			result, err := s.Compress(data, req.Options)
+			resultChan <- compressionResultWithIndex{
+				index:  index,
+				result: result,
+				err:    err,
+			}
+		}(i, imgData)
+	}
+
+	// 等待所有goroutine完成后关闭channel
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// 收集结果
+	results := make([]CompressionResult, numImages)
 	successCount := 0
 	failedCount := 0
+	validResults := make([]bool, numImages)
 
-	for _, imgData := range req.Images {
-		result, err := s.Compress(imgData, req.Options)
-		if err != nil {
+	for res := range resultChan {
+		if res.err != nil {
 			failedCount++
 			continue
 		}
-		results = append(results, *result)
+		results[res.index] = *res.result
+		validResults[res.index] = true
 		successCount++
 	}
 
+	// 过滤出有效结果（保持原始顺序）
+	finalResults := make([]CompressionResult, 0, successCount)
+	for i, valid := range validResults {
+		if valid {
+			finalResults = append(finalResults, results[i])
+		}
+	}
+
 	return &BatchCompressionResponse{
-		Results:      results,
+		Results:      finalResults,
 		SuccessCount: successCount,
 		FailedCount:  failedCount,
 	}, nil
@@ -143,8 +205,28 @@ func (s *Service) Save(result *CompressionResult, options SaveOptions) (string, 
 		return "", fmt.Errorf("创建目录失败: %w", err)
 	}
 
+	// 处理文件名，添加_compressed后缀
+	filename := options.Filename
+	ext := filepath.Ext(filename)
+	if ext == "" {
+		// 根据输出格式确定扩展名
+		if result.OutputFormat != "" {
+			ext = s.getExtensionForFormat(result.OutputFormat)
+		} else {
+			ext = ".jpg"
+		}
+		filename = filename + "_compressed" + ext
+	} else {
+		// 在扩展名前添加_compressed后缀
+		nameWithoutExt := filename[:len(filename)-len(ext)]
+		if result.OutputFormat != "" {
+			ext = s.getExtensionForFormat(result.OutputFormat)
+		}
+		filename = nameWithoutExt + "_compressed" + ext
+	}
+
 	// 构建完整的文件路径
-	fullPath := filepath.Join(options.Path, options.Filename)
+	fullPath := filepath.Join(options.Path, filename)
 
 	// 检查文件是否已存在
 	if !options.Overwrite {
@@ -168,8 +250,15 @@ func (s *Service) BatchSaveToZip(results []*CompressionResult, options BatchSave
 		return "", fmt.Errorf("创建目录失败: %w", err)
 	}
 
+	// 生成带时间戳的ZIP文件名（如果未指定）
+	zipFilename := options.ZipFilename
+	if zipFilename == "" {
+		timestamp := time.Now().Format("20060102_150405")
+		zipFilename = fmt.Sprintf("compressed_images_%s.zip", timestamp)
+	}
+
 	// 构建完整的ZIP文件路径
-	zipPath := filepath.Join(options.ZipPath, options.ZipFilename)
+	zipPath := filepath.Join(options.ZipPath, zipFilename)
 
 	// 创建ZIP文件
 	w, err := os.Create(zipPath)
@@ -186,15 +275,26 @@ func (s *Service) BatchSaveToZip(results []*CompressionResult, options BatchSave
 		// 获取文件名
 		var filename string
 		if i < len(options.Filenames) && options.Filenames[i] != "" {
-			filename = options.Filenames[i]
+			// 使用提供的文件名，添加_compressed后缀
+			baseName := options.Filenames[i]
+			ext := filepath.Ext(baseName)
+			nameWithoutExt := baseName[:len(baseName)-len(ext)]
+			
+			// 根据输出格式确定扩展名
+			if result.OutputFormat != "" {
+				ext = s.getExtensionForFormat(result.OutputFormat)
+			} else if ext == "" {
+				ext = ".jpg"
+			}
+			
+			filename = nameWithoutExt + "_compressed" + ext
 		} else {
-			filename = fmt.Sprintf("compressed_image_%d.jpg", i+1)
-		}
-
-		// 确保文件名有扩展名
-		ext := filepath.Ext(filename)
-		if ext == "" {
-			filename += ".jpg"
+			// 生成默认文件名
+			ext := ".jpg"
+			if result.OutputFormat != "" {
+				ext = s.getExtensionForFormat(result.OutputFormat)
+			}
+			filename = fmt.Sprintf("image_%d_compressed%s", i+1, ext)
 		}
 
 		// 添加文件到ZIP
@@ -210,6 +310,28 @@ func (s *Service) BatchSaveToZip(results []*CompressionResult, options BatchSave
 	}
 
 	return zipPath, nil
+}
+
+// getExtensionForFormat 根据图片格式获取文件扩展名
+func (s *Service) getExtensionForFormat(format ImageFormat) string {
+	switch format {
+	case FormatJPEG:
+		return ".jpg"
+	case FormatPNG:
+		return ".png"
+	case FormatWebP:
+		return ".webp"
+	case FormatGIF:
+		return ".gif"
+	case FormatBMP:
+		return ".bmp"
+	case FormatTIFF:
+		return ".tiff"
+	case FormatAVIF:
+		return ".avif"
+	default:
+		return ".jpg"
+	}
 }
 
 // calculateTargetSize 计算目标尺寸
@@ -278,7 +400,11 @@ func (s *Service) encodeImage(img image.Image, format ImageFormat, options Compr
 			return nil, err
 		}
 	case FormatPNG:
-		if err := imaging.Encode(&buf, img, imaging.PNG); err != nil {
+		// PNG使用标准库编码（PNG是无损格式，不支持质量参数）
+		encoder := png.Encoder{
+			CompressionLevel: png.DefaultCompression,
+		}
+		if err := encoder.Encode(&buf, img); err != nil {
 			return nil, err
 		}
 	case FormatWebP:
@@ -290,7 +416,7 @@ func (s *Service) encodeImage(img image.Image, format ImageFormat, options Compr
 		}
 	case FormatGIF:
 		// GIF编码（不支持质量参数）
-		if err := imaging.Encode(&buf, img, imaging.GIF); err != nil {
+		if err := gif.Encode(&buf, img, nil); err != nil {
 			return nil, err
 		}
 	case FormatBMP:

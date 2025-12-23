@@ -25,6 +25,11 @@ export const getMimeTypeFromExtension = (ext: string): string => {
       return 'image/gif';
     case 'webp':
       return 'image/webp';
+    case 'bmp':
+      return 'image/bmp';
+    case 'tiff':
+    case 'tif':
+      return 'image/tiff';
     default:
       return 'application/octet-stream';
   }

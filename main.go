@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"changeme/compressor"
+	"changeme/editor"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -42,6 +43,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(&GreetService{}),
 			application.NewService(compressor.NewCompressor()),
+			application.NewService(editor.NewEditor()),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

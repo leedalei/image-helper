@@ -245,6 +245,7 @@ func (c *Compressor) CompressImage(imageData string, options string) (string, er
 
 // BatchCompress 批量压缩图片
 // 前端调用格式：await compressor.BatchCompress(imageDataList, options)
+// 返回压缩后的图片数据列表和统计信息
 func (c *Compressor) BatchCompress(imageDataList []string, options string) (string, error) {
 	// 解析图片数据
 	images := make([][]byte, 0, len(imageDataList))
@@ -265,6 +266,31 @@ func (c *Compressor) BatchCompress(imageDataList []string, options string) (stri
 		Optimize:        true,
 	}
 
+	// 解析传入的选项
+	if options != "" {
+		var parsedOptions CompressionOptions
+		if err := json.Unmarshal([]byte(options), &parsedOptions); err != nil {
+			return "", fmt.Errorf("解析压缩选项失败: %w", err)
+		}
+
+		// 使用解析的选项
+		if parsedOptions.Quality > 0 {
+			compressionOptions.Quality = parsedOptions.Quality
+		}
+		if parsedOptions.Format != "" {
+			compressionOptions.Format = parsedOptions.Format
+		}
+		if parsedOptions.TargetWidth >= 0 {
+			compressionOptions.TargetWidth = parsedOptions.TargetWidth
+		}
+		if parsedOptions.TargetHeight >= 0 {
+			compressionOptions.TargetHeight = parsedOptions.TargetHeight
+		}
+		compressionOptions.KeepAspectRatio = parsedOptions.KeepAspectRatio
+		compressionOptions.Progressive = parsedOptions.Progressive
+		compressionOptions.Optimize = parsedOptions.Optimize
+	}
+
 	// 执行批量压缩
 	req := BatchCompressionRequest{
 		Images:  images,
@@ -275,18 +301,24 @@ func (c *Compressor) BatchCompress(imageDataList []string, options string) (stri
 		return "", fmt.Errorf("批量压缩失败: %w", err)
 	}
 
-	// 编码结果
-	results := make([]string, 0, len(resp.Results))
+	// 编码结果为base64
+	compressedDataList := make([]string, 0, len(resp.Results))
 	for _, result := range resp.Results {
 		compressedData := base64.StdEncoding.EncodeToString(result.Data)
-		results = append(results, compressedData)
+		compressedDataList = append(compressedDataList, compressedData)
+	}
+
+	// 将压缩后的数据列表转为JSON数组
+	compressedDataJSON, err := json.Marshal(compressedDataList)
+	if err != nil {
+		return "", fmt.Errorf("序列化压缩结果失败: %w", err)
 	}
 
 	return fmt.Sprintf(`{
-		"results": %d,
+		"compressedData": %s,
 		"successCount": %d,
 		"failedCount": %d
-	}`, len(results), resp.SuccessCount, resp.FailedCount), nil
+	}`, string(compressedDataJSON), resp.SuccessCount, resp.FailedCount), nil
 }
 
 // SaveImage 保存图片到本地

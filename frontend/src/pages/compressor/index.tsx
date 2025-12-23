@@ -14,8 +14,26 @@ import ImageComparison from '../../components/ImageComparison';
 import CompressorSettings from '../../components/CompressorSettings';
 import { Compressor } from '../../../bindings/changeme/compressor';
 import { Plus, X, Ellipsis, ArrowRight, Download, Play, ZoomIn, ZoomOut, RotateCcwSquare, RotateCwSquare, Bolt } from 'lucide-react';
-import { toast } from 'sonner';
 import { base64ToBlob, fileToBase64, formatFileSize, getMimeTypeFromExtension } from '@/lib/utils';
+import {
+  notifySettingsUpdated,
+  notifySettingsReset,
+  notifySavePathUpdated,
+  notifyBatchCompressionComplete,
+  notifyImageSaved,
+  notifyZipSaved,
+  notifySavePathRequired,
+  notifyConfigureSavePath,
+  notifyNoDataToSave,
+} from '@/lib/toast';
+import {
+  handleFileReadError,
+  handleCompressionError,
+  handleSaveError,
+  handleFileSelectError,
+  handlePathSelectError,
+  isDialogCancelled,
+} from '@/lib/errorHandler';
 const { CompressImage, BatchCompress, BatchSaveToZip, SaveImage, SaveFileDialog, ReadImageFile, OpenFileDialog, SelectDirectoryDialog } = Compressor;
 
 interface ImageFile {
@@ -99,11 +117,15 @@ function ImageCompressor() {
   // 预览压缩图片（不更新status）
   const previewImageWithBackend = async (
     base64Data: string,
-    file: File
+    file: File,
+    overrideSettings?: typeof settings
   ) => {
     try {
-      let targetFormat = settings.format;
-      if (settings.format === 'original') {
+      // 使用传入的设置或当前设置
+      const currentSettings = overrideSettings || settings;
+      
+      let targetFormat = currentSettings.format;
+      if (currentSettings.format === 'original') {
         const extension = file.name.split('.').pop()?.toLowerCase();
         if (extension === 'jpg' || extension === 'jpeg') {
           targetFormat = 'jpeg';
@@ -123,13 +145,13 @@ function ImageCompressor() {
       }
 
       const options = JSON.stringify({
-        quality: settings.quality,
+        quality: currentSettings.quality,
         format: targetFormat,
-        targetWidth: settings.targetWidth,
-        targetHeight: settings.targetHeight,
-        keepAspectRatio: settings.keepAspectRatio,
-        progressive: settings.progressive,
-        optimize: settings.optimize,
+        targetWidth: currentSettings.targetWidth,
+        targetHeight: currentSettings.targetHeight,
+        keepAspectRatio: currentSettings.keepAspectRatio,
+        progressive: currentSettings.progressive,
+        optimize: currentSettings.optimize,
       });
 
       const result = await CompressImage(base64Data, options);
@@ -259,7 +281,7 @@ function ImageCompressor() {
         setSettings(prev => ({ ...prev, batchSavePath: defaultPath }));
       } else {
         // 如果无法获取路径，提示用户配置
-        toast.info('请在设置中配置保存目录');
+        notifyConfigureSavePath();
       }
     }
 
@@ -354,12 +376,10 @@ function ImageCompressor() {
           }
         }
       } catch (error) {
-        console.error('读取文件失败:', error);
-        alert('读取文件失败，请重试');
+        handleFileReadError(error);
       }
     } catch (error) {
-      console.error('文件选择失败:', error);
-      alert('文件选择失败，请重试');
+      handleFileSelectError(error);
     }
   };
 
@@ -379,19 +399,19 @@ function ImageCompressor() {
       setCurrentPreview(null);
       setIsCompressionStarted(false);
 
-      // 重新预览当前选中的图片（使用 ref 获取最新状态）
+      // 重新预览当前选中的图片（使用 ref 获取最新状态，传入新设置避免闭包问题）
       const currentImage = imageFilesRef.current[selectedIndexRef.current];
       if (currentImage) {
         fileToBase64(currentImage.file)
-          .then(base64Data => previewImageWithBackend(base64Data, currentImage.file))
+          .then(base64Data => previewImageWithBackend(base64Data, currentImage.file, newSettings))
           .catch(error => {
             console.error('读取文件失败:', error);
           });
       }
 
-      toast.success('设置已更新，图片需要重新压缩');
+      notifySettingsUpdated();
     } else {
-      toast.success('设置已更新');
+      notifySettingsUpdated();
     }
   };
 
@@ -408,7 +428,7 @@ function ImageCompressor() {
       optimize: true,
       batchSavePath: prev.batchSavePath, // 保留批量保存路径
     }));
-    toast.success('设置已重置');
+    notifySettingsReset();
   };
 
   // 更改批量保存路径
@@ -416,13 +436,13 @@ function ImageCompressor() {
     try {
       // 使用文件对话框让用户选择一个目录（通过选择文件获取目录）
       const selectedPath = await SelectDirectoryDialog(currentPath);
-      if (selectedPath) {
-        setSettings(prev => ({ ...prev, batchSavePath: selectedPath }));
-        toast.success('保存路径已更新');
+      if (isDialogCancelled(selectedPath)) {
+        return;
       }
+      setSettings(prev => ({ ...prev, batchSavePath: selectedPath }));
+      notifySavePathUpdated();
     } catch (error) {
-      console.error('选择保存路径失败:', error);
-      toast.error('选择保存路径失败，请重试');
+      handlePathSelectError(error);
     }
   };
 
@@ -432,7 +452,7 @@ function ImageCompressor() {
 
     // 检查是否配置了保存目录
     if (!settings.batchSavePath) {
-      toast.error('请先在设置中配置保存目录');
+      notifySavePathRequired();
       setIsSettingsOpen(true);
       return;
     }
@@ -468,6 +488,9 @@ function ImageCompressor() {
       const result = await BatchCompress(base64DataList, options);
       const parsed = JSON.parse(result);
 
+      // 获取压缩后的数据列表
+      const compressedDataList: string[] = parsed.compressedData || [];
+
       // 更新所有图片状态和原始数据
       const updatedImageFiles = imageFiles.map((img, index) => ({
         ...img,
@@ -482,26 +505,25 @@ function ImageCompressor() {
       const zipFilename = `compressed_images_${timestamp}.zip`;
 
       // 准备文件名列表
-      const filenames = imageFiles.map((img, index) => {
+      const filenames = imageFiles.map((img) => {
         const baseName = img.file.name.split('.')[0];
         const extension = targetFormat === 'jpeg' ? 'jpg' : targetFormat;
         return `${baseName}_compressed.${extension}`;
       });
 
-      // 调用批量保存到ZIP接口
+      // 调用批量保存到ZIP接口，使用压缩后的数据
       const zipResult = await BatchSaveToZip(
-        base64DataList,
+        compressedDataList,
         settings.batchSavePath,
         zipFilename,
         JSON.stringify(filenames)
       );
 
-      toast.success(`批量压缩完成！成功: ${parsed.successCount}, 失败: ${parsed.failedCount}`);
-      toast.success(`ZIP文件已保存到: ${zipResult}`);
+      notifyBatchCompressionComplete(parsed.successCount, parsed.failedCount);
+      notifyZipSaved(zipResult);
     } catch (error) {
-      console.error('批量压缩失败:', error);
+      handleCompressionError(error);
       setImageFiles(prev => prev.map(img => ({ ...img, status: 'error' as const })));
-      toast.error('批量压缩失败，请重试');
     }
   };
 
@@ -578,6 +600,9 @@ function ImageCompressor() {
     }));
   };
 
+  // 判断是否为单图模式
+  const isSingleImageMode = imageFiles.length < 2;
+
   // 计算压缩进度
   const completedCount = imageFiles.filter(img => img.status === 'completed').length;
   const totalCount = imageFiles.length;
@@ -585,34 +610,68 @@ function ImageCompressor() {
 
   // 保存当前选中的图片
   const handleSaveCurrent = async () => {
-    if (!currentFile || !currentPreview) {
-      toast.error('没有可保存的压缩数据');
+    if (!currentFile) {
+      notifyNoDataToSave();
       return;
     }
 
     try {
+      // 获取原始图片的 base64 数据
+      const base64Data = await fileToBase64(currentFile.file);
+      
+      // 确定目标格式
+      let targetFormat = settings.format;
+      if (settings.format === 'original') {
+        const extension = currentFile.file.name.split('.').pop()?.toLowerCase();
+        if (extension === 'jpg' || extension === 'jpeg') {
+          targetFormat = 'jpeg';
+        } else if (extension === 'png') {
+          targetFormat = 'png';
+        } else if (extension === 'webp') {
+          targetFormat = 'webp';
+        } else if (extension === 'gif') {
+          targetFormat = 'gif';
+        } else if (extension === 'bmp') {
+          targetFormat = 'bmp';
+        } else if (extension === 'tiff') {
+          targetFormat = 'tiff';
+        } else {
+          targetFormat = 'jpeg';
+        }
+      }
+
+      // 使用当前设置压缩图片
+      const options = JSON.stringify({
+        quality: settings.quality,
+        format: targetFormat,
+        targetWidth: settings.targetWidth,
+        targetHeight: settings.targetHeight,
+        keepAspectRatio: settings.keepAspectRatio,
+        progressive: settings.progressive,
+        optimize: settings.optimize,
+      });
+
+      const result = await CompressImage(base64Data, options);
+      const parsed = JSON.parse(result);
+
       const baseName = currentFile.file.name.split('.')[0];
-      const extension = settings.format === 'original'
-        ? currentFile.file.name.split('.').pop()
-        : settings.format;
+      const extension = targetFormat === 'jpeg' ? 'jpg' : targetFormat;
       const filename = `${baseName}_compressed.${extension}`;
 
       // 使用保存对话框选择保存位置
-      const filePath = await SaveFileDialog(filename, currentPreview.imageData, 'image/jpeg');
-      if (!filePath) return;
+      const filePath = await SaveFileDialog(filename, parsed.imageData, `image/${targetFormat}`);
+      if (isDialogCancelled(filePath)) return;
 
-      const result = await SaveImage(
-        currentPreview.imageData,
+      const saveResult = await SaveImage(
+        parsed.imageData,
         filePath.substring(0, filePath.lastIndexOf('/')),
         filePath.substring(filePath.lastIndexOf('/') + 1),
         true
       );
 
-      console.log('保存成功:', result);
-      toast.success(`图片已保存到: ${result}`);
+      notifyImageSaved(saveResult);
     } catch (error) {
-      console.error('保存失败:', error);
-      toast.error('保存失败，请重试');
+      handleSaveError(error);
     }
   };
 
@@ -622,7 +681,7 @@ function ImageCompressor() {
         // 文件选择器
         <div className="flex-1 flex flex-col items-center justify-center">
           <div className="mx-auto mb-4">
-            <h1 className="text-3xl font-bold text-center">大雷图片压缩器，压他妈的！</h1>
+            <h1 className="text-3xl font-bold text-center">大雷图片压缩器</h1>
           </div>
           <div className="max-w-2xl mx-auto">
             <Card>
@@ -673,12 +732,14 @@ function ImageCompressor() {
 
                   </div>
 
-                  {/* 进度条 */}
-                  <div className="flex flex-1 items-center gap-2 text-sm text-gray-600">
-                    <span>压缩进度</span>
-                    <Progress value={progress} className="flex-1" />
-                    <span>{completedCount}/{totalCount}</span>
-                  </div>
+                  {/* 进度条 - 仅多图模式显示 */}
+                  {!isSingleImageMode && (
+                    <div className="flex flex-1 items-center gap-2 text-sm text-gray-600">
+                      <span>压缩进度</span>
+                      <Progress value={progress} className="flex-1" />
+                      <span>{completedCount}/{totalCount}</span>
+                    </div>
+                  )}
                   {/* 操作按钮 */}
                   <div className="flex shrink-0 items-center gap-3">
                     <ButtonGroup>
@@ -690,25 +751,27 @@ function ImageCompressor() {
                       </Button>
                       <Button
                         variant="default"
-                        onClick={handleStartCompression}
+                        onClick={isSingleImageMode ? handleSaveCurrent : handleStartCompression}
                         disabled={imageFiles.length === 0}
                       >
                         <Play size={16} />
-                        开始压缩
+                        {isSingleImageMode ? '保存' : '开始压缩'}
                       </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="icon" aria-label="More Options">
-                            <Ellipsis />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className='bg-white'>
-                          <DropdownMenuItem onClick={handleSaveCurrent}>
-                            <Download />
-                            保存当前
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {!isSingleImageMode && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon" aria-label="More Options">
+                              <Ellipsis />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className='bg-white'>
+                            <DropdownMenuItem onClick={handleSaveCurrent}>
+                              <Download />
+                              保存当前
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </ButtonGroup>
                   </div>
 

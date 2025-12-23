@@ -13,24 +13,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-latest, windows-latest]
         include:
+          # macOS Intel
           - platform: macos-latest
             goos: darwin
             goarch: amd64
-            appname: image-helper-mac-amd64
+            appname: image-helper-darwin-amd64
+          # macOS Apple Silicon
           - platform: macos-latest
             goos: darwin
             goarch: arm64
-            appname: image-helper-mac-arm64
+            appname: image-helper-darwin-arm64
+          # Linux x64
           - platform: ubuntu-latest
             goos: linux
             goarch: amd64
             appname: image-helper-linux-amd64
+          # Linux ARM64
           - platform: ubuntu-latest
             goos: linux
             goarch: arm64
             appname: image-helper-linux-arm64
+          # Windows x64
           - platform: windows-latest
             goos: windows
             goarch: amd64
@@ -47,12 +51,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.21'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install pnpm
         run: npm install -g pnpm
@@ -75,7 +79,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
         working-directory: ./frontend
 
@@ -109,45 +113,52 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find ./artifacts -type f -name "image-helper-*" -exec cp {} ./release/ \;
+          ls -la ./release/
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          echo "## 🎉 Release ${{ github.ref_name }}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "这是一个自动发布的版本，包含以下平台的构建：" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### 支持的平台" >> release_notes.md
+          echo "- **macOS (Intel)**: \`image-helper-darwin-amd64\`" >> release_notes.md
+          echo "- **macOS (Apple Silicon)**: \`image-helper-darwin-arm64\`" >> release_notes.md
+          echo "- **Linux (x64)**: \`image-helper-linux-amd64\`" >> release_notes.md
+          echo "- **Linux (ARM64)**: \`image-helper-linux-arm64\`" >> release_notes.md
+          echo "- **Windows (x64)**: \`image-helper-windows-amd64.exe\`" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### 下载说明" >> release_notes.md
+          echo "根据您的操作系统选择对应的二进制文件进行下载。" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### 构建信息" >> release_notes.md
+          echo "- **版本**: ${{ github.ref_name }}" >> release_notes.md
+          echo "- **构建时间**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> release_notes.md
+          echo "- **构建者**: ${{ github.actor }}" >> release_notes.md
+          echo "- **提交哈希**: \`${{ github.sha }}\`" >> release_notes.md
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ github.ref_name }}
-          body: |
-            ## 🎉 Release ${{ github.ref_name }}
-
-            这是一个自动发布的版本，包含以下平台的构建：
-
-            ### 支持的平台
-            - macOS (AMD64)
-            - macOS (ARM64/M1/M2/M3)
-            - Linux (AMD64)
-            - Linux (ARM64)
-            - Windows (AMD64)
-
-            ### 下载说明
-            根据您的操作系统选择对应的二进制文件进行下载。
-
-            ### 构建信息
-            - **构建时间**: ${{ github.event.head_commit.timestamp }}
-            - **构建者**: ${{ github.actor }}
-            - **提交哈希**: ${{ github.sha }}
+          body_path: release_notes.md
           draft: false
           prerelease: false
           files: |
-            image-helper-*-amd64
-            image-helper-*-arm64
-            image-helper-*-amd64.exe
-
-      - name: Upload to Release Assets
-        run: |
-          # 确保所有构建的二进制文件都上传到 release
-          find . -name "image-helper-*" -type f -exec cp {} release/ \;
+            ./release/image-helper-darwin-amd64
+            ./release/image-helper-darwin-arm64
+            ./release/image-helper-linux-amd64
+            ./release/image-helper-linux-arm64
+            ./release/image-helper-windows-amd64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
 import { Button } from './ui/button';
-// @ts-ignore - Wails 绑定
-import { Compressor } from '../../../frontend/bindings/changeme/compressor';
+import { Compressor } from '../../bindings/changeme/compressor';
 import { Upload } from 'lucide-react';
-const { ReadImageFile, OpenFileDialog, OpenDirectoryDialog } = Compressor;
+import { getMimeTypeFromExtension, formatFileSize } from '@/lib/utils';
+import { handleFileReadError, handleFileSelectError } from '@/lib/errorHandler';
+import { showWarning } from '@/lib/toast';
+const { ReadImageFile, OpenFileDialog } = Compressor;
 
 interface UploaderProps {
   onFileSelect: (files: FileList | null) => void;
@@ -78,6 +80,7 @@ export default function Uploader({
             const file = new File([blob], fileName, { type: mimeType });
             files.push(file);
           } catch (error) {
+            // Log individual file read errors but continue with other files
             console.error(`读取文件失败: ${filePath}`, error);
           }
         }
@@ -88,15 +91,13 @@ export default function Uploader({
           files.forEach(file => dt.items.add(file));
           onFileSelect(dt.files);
         } else {
-          alert('没有成功读取任何文件');
+          showWarning('没有成功读取任何文件');
         }
       } catch (error) {
-        console.error('读取文件失败:', error);
-        alert('读取文件失败，请重试');
+        handleFileReadError(error);
       }
     } catch (error) {
-      console.error('文件选择失败:', error);
-      alert('文件选择失败，请重试');
+      handleFileSelectError(error);
     } finally {
       setIsLoading(false);
     }
@@ -105,50 +106,13 @@ export default function Uploader({
   const handleFolderSelect = async () => {
     try {
       setIsLoading(true);
-
-      // 使用后端对话框选择文件夹
-      const folderPath = await OpenDirectoryDialog();
-      if (!folderPath) {
-        // 用户取消选择
-        setIsLoading(false);
-        return;
-      }
-
-      // TODO: 这里需要后端支持读取文件夹中的所有图片文件
-      // 目前提示
-      alert('文件夹选择功能需要后端支持扫描文件夹中的图片文件');
-
+      // TODO: 文件夹选择功能需要后端支持扫描文件夹中的图片文件
+      showWarning('文件夹选择功能需要后端支持扫描文件夹中的图片文件');
       setIsLoading(false);
     } catch (error) {
-      console.error('文件夹选择失败:', error);
-      alert('文件夹选择失败，请重试');
+      handleFileSelectError(error);
       setIsLoading(false);
     }
-  };
-
-  const getMimeTypeFromExtension = (ext: string): string => {
-    const lowerExt = ext.toLowerCase();
-    switch (lowerExt) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'gif':
-        return 'image/gif';
-      case 'webp':
-        return 'image/webp';
-      default:
-        return 'application/octet-stream';
-    }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   return (
